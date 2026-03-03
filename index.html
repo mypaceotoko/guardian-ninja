@@ -23,13 +23,31 @@
 
       <!-- 占う前の説明文 -->
       <p class="intro-text">
-        今日の五行があなたを守護する忍を導きます。<br>
-        ボタンを押して今日の守護忍を確かめましょう。
+        生年月日を入力すると、あなた専用の守護忍が現れます。<br>
+        今日の五行があなたを守護する忍を導きます。
       </p>
+
+      <!-- [v1.4] 生年月日入力フォーム -->
+      <div class="birthdate-form">
+        <label class="birthdate-label" for="birthdateInput">
+          あなたの生年月日
+        </label>
+        <input
+          class="birthdate-input"
+          type="date"
+          id="birthdateInput"
+          name="birthdate"
+          aria-label="生年月日を入力してください"
+          aria-describedby="inputError"
+          max="2099-12-31"
+        />
+        <!-- 未入力エラーメッセージ（初期は非表示） -->
+        <p class="input-error" id="inputError" role="alert" hidden></p>
+      </div>
 
       <!-- 占うボタン -->
       <button class="btn-divine" id="btnDivine">
-        今日の守護忍を占う
+        今日の運勢を占う
       </button>
 
       <!-- 読み込み中インジケーター（初期は非表示） -->
@@ -39,7 +57,7 @@
         <span class="loading-dot"></span>
       </div>
 
-      <!-- エラーメッセージ（初期は非表示） -->
+      <!-- API エラーメッセージ（初期は非表示） -->
       <p class="error-msg" id="errorMsg" hidden></p>
 
       <!-- 結果エリア（初期は非表示・フェードインで表示） -->
@@ -47,7 +65,7 @@
 
         <!-- 五行バッジ -->
         <div class="gogyou-badge" id="gogyouBadge">
-          <span class="gogyou-label">今日の五行</span>
+          <span class="gogyou-label">あなたの今日の五行</span>
           <span class="gogyou-name" id="gogyouName"></span>
         </div>
 
@@ -61,13 +79,16 @@
           />
         </div>
 
-        <!-- キャラクター名 -->
+        <!-- キャラクター名（日本語） -->
         <h2 class="char-name" id="charName"></h2>
 
-        <!-- 世界観テキスト：守護忍名の下に表示 -->
+        <!-- [v1.4] 名セリフ（キャラ名の直下） -->
+        <blockquote class="char-quote" id="charQuote" hidden></blockquote>
+
+        <!-- 世界観テキスト -->
         <p class="world-text" id="worldText"></p>
 
-        <!-- [v1.3] キャラクタープロフィール（所属・属性・役職など） -->
+        <!-- キャラクタープロフィール（所属・属性・役職など） -->
         <p class="char-profile" id="charProfile"></p>
 
         <!-- ラッキーカラー -->
@@ -96,7 +117,7 @@
 
     <!-- フッター -->
     <footer class="site-footer">
-      <!-- [v1.3] APIクレジット -->
+      <!-- APIクレジット -->
       <p>キャラクターデータ: <a href="https://dattebayo-api.onrender.com" target="_blank" rel="noopener">Dattebayo API</a></p>
     </footer>
 
