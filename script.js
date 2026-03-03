@@ -4,16 +4,16 @@
  * 処理の流れ:
  *   1. ボタンクリック
  *   2. 今日の日付から五行を決定
- *   3. Dattebayo API からキャラクター一覧を取得
+ *   3. Dattebayo API から人気キャラTop50プールに含まれるキャラを取得
  *   4. 五行に合ったキャラクターを選ぶ（画像検証付き）
  *   5. 結果をカードに表示（フェードイン）
  *
  * 変更履歴:
  *   v1.0 - 初版
  *   v1.1 - 世界観テキスト・吉方位・画像品質保証・日本語名変換を追加
- *   v1.2 - [改修] Dattebayo API ベースに統一、プロフィール表示を追加
- *           api-dattebayo.vercel.app はフロントエンドUIのみのため、
- *           同一データを提供する dattebayo-api.onrender.com を使用する
+ *   v1.2 - Dattebayo API ベースに統一、プロフィール表示を追加
+ *   v1.3 - [改修] 人気キャラTop50固定プール方式に変更
+ *           APIから取得したキャラをプールでフィルタし、日本語名で表示する
  */
 
 // ============================================================
@@ -35,7 +35,6 @@ const GOGYOU = {
     action: "新しいことを始めよう",
     worldText: "成長の気が巡る日。挑戦が未来を広げます。",
     direction: "東",
-    // 木属性: Wind Release（風遁）を持つキャラ → 自然・成長系
     keywords: ["Wind Release"],
   },
   1: {
@@ -46,7 +45,6 @@ const GOGYOU = {
     action: "情熱的に行動しよう",
     worldText: "情熱が高まる日。迷うより行動を。",
     direction: "南",
-    // 火属性: Fire Release（火遁）を持つキャラ → 攻撃・情熱系
     keywords: ["Fire Release"],
   },
   2: {
@@ -57,7 +55,6 @@ const GOGYOU = {
     action: "身の回りを整えよう",
     worldText: "安定の気が流れています。基盤を整えると吉。",
     direction: "中央",
-    // 土属性: Earth Release（土遁）を持つキャラ → 防御・安定系
     keywords: ["Earth Release"],
   },
   3: {
@@ -68,7 +65,6 @@ const GOGYOU = {
     action: "不要なものを手放そう",
     worldText: "決断のエネルギーが強い日。手放す勇気を。",
     direction: "西",
-    // 金属性: Lightning Release（雷遁）を持つキャラ → クール・知性系
     keywords: ["Lightning Release"],
   },
   4: {
@@ -79,21 +75,20 @@ const GOGYOU = {
     action: "柔軟に流れに乗ろう",
     worldText: "流れに身を任せることで運が動きます。",
     direction: "北",
-    // 水属性: Water Release（水遁）を持つキャラ → 冷静・内向系
     keywords: ["Water Release"],
   },
 };
 
 /**
- * [v1.2] Dattebayo API のベース URL。
+ * Dattebayo API のベース URL。
  * api-dattebayo.vercel.app はフロントエンドUIのみのため、
- * 同一データを提供する REST API エンドポイントを使用する。
+ * REST API 本体の dattebayo-api.onrender.com を使用する。
  */
 const API_BASE = "https://dattebayo-api.onrender.com";
 
 /**
  * 1回のリクエストで取得するキャラクター数。
- * フィルタリングに十分な候補を確保するため多めに設定する。
+ * Top50プールとのマッチングに十分な数を確保する。
  */
 const FETCH_LIMIT = 50;
 
@@ -103,83 +98,75 @@ const FETCH_LIMIT = 50;
 const MAX_IMAGE_TRIES = 10;
 
 /**
- * 英語名 → 日本語名 変換マップ。
- * Dattebayo API のレスポンスには日本語名フィールドがないため、
- * このマップで補完する。将来的な拡張はここにエントリを追加するだけでよい。
+ * [v1.3] 人気キャラ Top50 固定プール。
  *
- * 形式: "APIのnameフィールド（英語）": "日本語名"
+ * キー   : Dattebayo API の "name" フィールドと完全一致する英語名
+ *           （APIでは特殊文字 ō/ū/ā 等が使われる場合があるため正確に記載）
+ * 値     : 表示用の日本語名
+ *
+ * ※ APIで確認した正式名を使用している。
+ *   ユーザー指定名とAPIの正式名が異なる場合は正式名に修正済み。
+ *   例: "Killer Bee" → API正式名 "Killer B"
+ *       "Choji Akimichi" → API正式名 "Chōji Akimichi"
+ *       "Kankuro" → API正式名 "Kankurō"
+ *       "Hinata Hyuga" → API正式名 "Hinata Hyūga"
+ *       "Neji Hyuga" → API正式名 "Neji Hyūga"
+ *       "Choza Akimichi" → API正式名 "Chōza Akimichi"
+ *       "Kurenai Yuhi" → API正式名 "Kurenai Yūhi"
  */
-const NAME_JP_MAP = {
-  // 主要キャラ
-  "Naruto Uzumaki":      "うずまきナルト",
-  "Sasuke Uchiha":       "うちはサスケ",
-  "Sakura Haruno":       "春野サクラ",
-  "Kakashi Hatake":      "はたけカカシ",
-  "Itachi Uchiha":       "うちはイタチ",
-  "Obito Uchiha":        "うちはオビト",
-  "Madara Uchiha":       "うちはマダラ",
-  "Minato Namikaze":     "波風ミナト",
-  "Kushina Uzumaki":     "うずまきクシナ",
-  "Jiraiya":             "自来也",
-  "Tsunade":             "綱手",
-  "Orochimaru":          "大蛇丸",
-  "Gaara":               "我愛羅",
-  "Temari":              "テマリ",
-  "Kankuro":             "カンクロウ",
-  // 木ノ葉の仲間たち
-  "Rock Lee":            "ロック・リー",
-  "Neji Hyuga":          "日向ネジ",
-  "Hinata Hyuga":        "日向ヒナタ",
-  "Hiashi Hyuga":        "日向ヒアシ",
-  "Shikamaru Nara":      "奈良シカマル",
-  "Ino Yamanaka":        "山中いの",
-  "Choji Akimichi":      "秋道チョウジ",
-  "Kiba Inuzuka":        "犬塚キバ",
-  "Shino Aburame":       "油女シノ",
-  "Tenten":              "テンテン",
-  "Might Guy":           "マイト・ガイ",
-  "Asuma Sarutobi":      "猿飛アスマ",
-  "Kurenai Yuhi":        "夕日紅",
-  "Anko Mitarashi":      "みたらしアンコ",
-  "Iruka Umino":         "うみのイルカ",
-  "Konohamaru Sarutobi": "猿飛コノハマル",
-  // 暁・敵キャラ
-  "Pain":                "ペイン",
-  "Nagato":              "長門",
-  "Konan":               "小南",
-  "Kisame Hoshigaki":    "干柿鬼鮫",
-  "Deidara":             "デイダラ",
-  "Sasori":              "サソリ",
-  "Hidan":               "飛段",
-  "Kakuzu":              "角都",
-  "Zetsu":               "ゼツ",
-  "Tobi":                "トビ",
-  // 影・里の長
-  "Killer Bee":          "キラービー",
-  "A":                   "エー（四代目雷影）",
-  "Mei Terumi":          "照美メイ",
-  "Onoki":               "オオノキ",
-  "Raikage":             "雷影",
-  // 千手一族・歴代火影
-  "Hashirama Senju":     "千手柱間",
-  "Tobirama Senju":      "千手扉間",
-  "Hiruzen Sarutobi":    "猿飛ヒルゼン",
-  // 大筒木一族
-  "Kaguya Otsutsuki":    "大筒木カグヤ",
-  "Hagoromo Otsutsuki":  "大筒木ハゴロモ",
-  "Hamura Otsutsuki":    "大筒木ハムラ",
-  // BORUTO世代
-  "Boruto Uzumaki":      "うずまきボルト",
-  "Sarada Uchiha":       "うちはサラダ",
-  "Mitsuki":             "ミツキ",
-  "Kawaki":              "カワキ",
-  // その他
-  "Kabuto Yakushi":      "薬師カブト",
-  "Yamato":              "ヤマト",
-  "Sai":                 "サイ",
-  "Shikadai Nara":       "奈良シカダイ",
-  "Inojin Yamanaka":     "山中いのじん",
-  "Chocho Akimichi":     "秋道チョウチョウ",
+const TOP50_POOL = {
+  // ─── 木ノ葉の忍 ───
+  "Naruto Uzumaki":   "うずまきナルト",
+  "Sasuke Uchiha":    "うちはサスケ",
+  "Sakura Haruno":    "春野サクラ",
+  "Kakashi Hatake":   "はたけカカシ",
+  "Rock Lee":         "ロック・リー",
+  "Hinata Hyūga":     "日向ヒナタ",
+  "Neji Hyūga":       "日向ネジ",
+  "Shikamaru Nara":   "奈良シカマル",
+  "Chōji Akimichi":   "秋道チョウジ",
+  "Kiba Inuzuka":     "犬塚キバ",
+  "Shino Aburame":    "油女シノ",
+  "Tenten":           "テンテン",
+  "Might Guy":        "マイト・ガイ",
+  "Asuma Sarutobi":   "猿飛アスマ",
+  "Kurenai Yūhi":     "夕日紅",
+  "Anko Mitarashi":   "みたらしアンコ",
+  "Iruka Umino":      "うみのイルカ",
+  "Sai":              "サイ",
+  "Yamato":           "ヤマト",
+  // ─── 伝説の三忍・歴代火影 ───
+  "Jiraiya":          "自来也",
+  "Tsunade":          "綱手",
+  "Orochimaru":       "大蛇丸",
+  "Minato Namikaze":  "波風ミナト",
+  "Hashirama Senju":  "千手柱間",
+  "Kushina Uzumaki":  "うずまきクシナ",
+  // ─── うちは一族 ───
+  "Itachi Uchiha":    "うちはイタチ",
+  "Madara Uchiha":    "うちはマダラ",
+  "Obito Uchiha":     "うちはオビト",
+  "Shisui Uchiha":    "うちはシスイ",
+  // ─── 砂の忍 ───
+  "Gaara":            "我愛羅",
+  "Temari":           "テマリ",
+  "Kankurō":          "カンクロウ",
+  // ─── 暁 ───
+  "Pain":             "ペイン",
+  "Nagato":           "長門",
+  "Konan":            "小南",
+  "Deidara":          "デイダラ",
+  "Sasori":           "サソリ",
+  "Hidan":            "ヒダン",
+  "Tobi":             "トビ",
+  // ─── その他の主要キャラ ───
+  "Killer B":         "キラービー",
+  "Kabuto Yakushi":   "薬師カブト",
+  "Zabuza Momochi":   "ももちザブザ",
+  "Haku":             "ハク",
+  "Rin Nohara":       "野原リン",
+  "Kimimaro":         "君麻呂",
+  "Chōza Akimichi":   "秋道チョウザ",
 };
 
 // ============================================================
@@ -190,7 +177,6 @@ const loadingEl    = document.getElementById("loading");
 const errorMsgEl   = document.getElementById("errorMsg");
 const resultEl     = document.getElementById("result");
 
-// 結果表示用の各要素
 const gogyouBadge   = document.getElementById("gogyouBadge");
 const gogyouNameEl  = document.getElementById("gogyouName");
 const charImageEl   = document.getElementById("charImage");
@@ -200,7 +186,6 @@ const luckyColorEl  = document.getElementById("luckyColor");
 const colorDotEl    = document.getElementById("colorDot");
 const luckyActionEl = document.getElementById("luckyAction");
 const directionEl   = document.getElementById("direction");
-// [v1.2] プロフィール要素
 const profileEl     = document.getElementById("charProfile");
 
 // ============================================================
@@ -214,7 +199,7 @@ const profileEl     = document.getElementById("charProfile");
  * @returns {number} 0〜4 の整数
  */
 function getTodayGogyouIndex() {
-  const now = new Date();
+  const now   = new Date();
   const year  = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day   = String(now.getDate()).padStart(2, "0");
@@ -247,29 +232,36 @@ function hasKeyword(natureType, keywords) {
 }
 
 /**
- * 英語名を日本語名に変換する。
- * NAME_JP_MAP に登録されていない場合は英語名をそのまま返す。
+ * [v1.3] APIから返ってきたキャラクター名がTop50プールに含まれるか判定する。
+ * TOP50_POOL のキー（英語名）と完全一致する場合に true を返す。
  *
- * @param {string} englishName - APIから取得した英語名
+ * @param {string} name - APIの "name" フィールド
+ * @returns {boolean}
+ */
+function isInTop50Pool(name) {
+  return Object.prototype.hasOwnProperty.call(TOP50_POOL, name);
+}
+
+/**
+ * [v1.3] キャラクター名を日本語名に変換する。
+ * TOP50_POOL に登録されていない場合は英語名をそのまま返す。
+ *
+ * @param {string} apiName - APIの "name" フィールド（英語）
  * @returns {string} 日本語名、またはそのままの英語名
  */
-function toJapaneseName(englishName) {
-  return NAME_JP_MAP[englishName] || englishName;
+function toJapaneseName(apiName) {
+  return TOP50_POOL[apiName] || apiName;
 }
 
 /**
  * 画像URLが実際に取得できるか（404でないか）を検証する。
- * img要素のロード試行で確認する。
  *
  * @param {string} url - 検証する画像URL
- * @returns {Promise<boolean>} 取得可能なら true、不可なら false
+ * @returns {Promise<boolean>}
  */
 function validateImageUrl(url) {
   return new Promise((resolve) => {
-    if (!url || url.trim() === "") {
-      resolve(false);
-      return;
-    }
+    if (!url || url.trim() === "") { resolve(false); return; }
     const img = new Image();
     img.onload  = () => resolve(true);
     img.onerror = () => resolve(false);
@@ -279,28 +271,25 @@ function validateImageUrl(url) {
 
 /**
  * キャラクターの images 配列から有効な画像URLを1つ探す。
- * 先頭から順に検証し、最初に有効だったURLを返す。
  * すべて無効な場合は null を返す。
  *
  * @param {string[]} images - キャラクターの画像URL配列
- * @returns {Promise<string|null>} 有効なURL、またはnull
+ * @returns {Promise<string|null>}
  */
 async function findValidImageUrl(images) {
   if (!Array.isArray(images) || images.length === 0) return null;
   for (const url of images) {
-    const isValid = await validateImageUrl(url);
-    if (isValid) return url;
+    if (await validateImageUrl(url)) return url;
   }
   return null;
 }
 
 /**
- * [v1.2] キャラクターのプロフィール情報を組み立てる。
- * personal フィールドから所属・忍術属性・役職などを抽出して
- * 日本語の短い説明文を返す。
+ * キャラクターのプロフィール情報を組み立てる。
+ * personal フィールドから所属・属性・役職などを抽出して短い説明文を返す。
  *
  * @param {Object} character - APIから取得したキャラクターオブジェクト
- * @returns {string} プロフィール文字列（最大2行程度）
+ * @returns {string} プロフィール文字列
  */
 function buildProfile(character) {
   const personal = character.personal || {};
@@ -312,31 +301,27 @@ function buildProfile(character) {
     : (typeof personal.affiliation === "string" ? personal.affiliation : "");
   if (affiliation) parts.push(`所属：${affiliation}`);
 
-  // 役職・肩書き（最初の1つ）
+  // 役職（最初の1つ、長すぎるものは除外）
   const occupation = Array.isArray(personal.occupation)
     ? personal.occupation[0]
     : (typeof personal.occupation === "string" ? personal.occupation : "");
   if (occupation && occupation.length < 30) parts.push(`役職：${occupation}`);
 
-  // 忍術属性（最初の2つ、"Release"を"遁"に変換）
+  // 忍術属性（最初の2つ、英語表記を簡易変換）
   const natureType = Array.isArray(character.natureType)
     ? character.natureType
         .slice(0, 2)
-        .map((n) => n.replace(" Release", "遁").replace("  (Affinity)", "（素質）").replace("  (Novel only)", ""))
+        .map((n) =>
+          n.replace(" Release", "遁")
+           .replace("  (Affinity)", "（素質）")
+           .replace(/\s*\(.*?\)/g, "")
+           .trim()
+        )
         .join("・")
     : "";
   if (natureType) parts.push(`属性：${natureType}`);
 
-  // 一族
-  const clan = typeof personal.clan === "string" && personal.clan.trim()
-    ? personal.clan.replace(/\s*\(.*?\)/g, "").trim()
-    : "";
-  if (clan && clan.length < 20) parts.push(`一族：${clan}`);
-
-  // 情報がなければデフォルト文言
   if (parts.length === 0) return "詳細不明の忍";
-
-  // 最大3項目まで表示
   return parts.slice(0, 3).join("　／　");
 }
 
@@ -372,38 +357,38 @@ function showError(message) {
 /**
  * 結果をカードに反映し、フェードインで表示する。
  *
- * @param {Object} gogyou        - 五行設定オブジェクト
- * @param {Object} character     - APIから取得したキャラクターオブジェクト
+ * @param {Object}      gogyou        - 五行設定オブジェクト
+ * @param {Object}      character     - APIから取得したキャラクターオブジェクト
  * @param {string|null} validImageUrl - 検証済みの有効な画像URL
  */
 function showResult(gogyou, character, validImageUrl) {
   // --- 五行バッジ ---
-  gogyouNameEl.textContent = gogyou.name;
-  gogyouBadge.style.background   = gogyou.badgeColor;
-  gogyouBadge.style.borderColor  = gogyou.colorCode;
-  gogyouNameEl.style.color       = gogyou.colorCode;
+  gogyouNameEl.textContent          = gogyou.name;
+  gogyouBadge.style.background      = gogyou.badgeColor;
+  gogyouBadge.style.borderColor     = gogyou.colorCode;
+  gogyouNameEl.style.color          = gogyou.colorCode;
 
-  // --- キャラクター画像（検証済みURLを使用） ---
+  // --- キャラクター画像 ---
   if (validImageUrl) {
-    charImageEl.src   = validImageUrl;
-    charImageEl.alt   = toJapaneseName(character.name) + "の画像";
+    charImageEl.src           = validImageUrl;
+    charImageEl.alt           = toJapaneseName(character.name) + "の画像";
     charImageEl.style.display = "";
   } else {
     charImageEl.style.display = "none";
   }
 
-  // --- キャラクター名（日本語変換） ---
+  // --- キャラクター名（日本語表記） ---
   charNameEl.textContent = toJapaneseName(character.name);
 
   // --- 世界観テキスト ---
   worldTextEl.textContent = gogyou.worldText;
 
-  // --- [v1.2] プロフィール ---
+  // --- プロフィール ---
   profileEl.textContent = buildProfile(character);
 
   // --- ラッキーカラー ---
-  luckyColorEl.textContent = gogyou.luckyColor;
-  colorDotEl.style.backgroundColor = gogyou.colorCode;
+  luckyColorEl.textContent              = gogyou.luckyColor;
+  colorDotEl.style.backgroundColor      = gogyou.colorCode;
 
   // --- 開運アクション ---
   luckyActionEl.textContent = gogyou.action;
@@ -427,6 +412,11 @@ function showResult(gogyou, character, validImageUrl) {
 /**
  * 診断のメイン処理。
  * ボタンクリック時に呼び出される非同期関数。
+ *
+ * [v1.3] キャラクター取得ロジックの変更点:
+ *   - 複数ページを取得してTop50プールに含まれるキャラを収集する
+ *   - プール内キャラが見つかった段階で五行フィルタリングを行う
+ *   - 画像検証済みのキャラをランダムに選んで表示する
  */
 async function runDivination() {
   showLoading();
@@ -436,39 +426,50 @@ async function runDivination() {
     const gogyouIndex = getTodayGogyouIndex();
     const gogyou = GOGYOU[gogyouIndex];
 
-    // --- Step 2: Dattebayo API からキャラクター一覧を取得 ---
-    // ページをランダムに選ぶことで毎回異なるキャラクターが出やすくなる
-    // 総キャラ数 1431 / FETCH_LIMIT 50 = 最大28ページ
-    const randomPage = Math.floor(Math.random() * 28) + 1;
-    const url = `${API_BASE}/characters?page=${randomPage}&limit=${FETCH_LIMIT}`;
+    // --- Step 2: API から複数ページを取得してTop50プールに含まれるキャラを収集 ---
+    // Top50キャラは主に最初の数ページに集中しているため、
+    // 最大4ページ（200件）を取得してプールとマッチングする
+    const MAX_PAGES = 4;
+    let poolChars = []; // Top50プールに含まれるキャラの配列
 
-    const response = await fetch(url);
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const url = `${API_BASE}/characters?page=${page}&limit=${FETCH_LIMIT}`;
+      const response = await fetch(url);
 
-    // HTTP エラーチェック
-    if (!response.ok) {
-      throw new Error(`APIエラー: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`APIエラー: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const characters = data.characters;
+
+      if (!Array.isArray(characters) || characters.length === 0) break;
+
+      // Top50プールに含まれるキャラのみを抽出
+      const matched = characters.filter((c) => isInTop50Pool(c.name));
+      poolChars = poolChars.concat(matched);
+
+      // 十分な候補が集まったら早期終了（パフォーマンス最適化）
+      if (poolChars.length >= 20) break;
     }
 
-    const data = await response.json();
-    const characters = data.characters;
-
-    // キャラクター配列の存在確認
-    if (!Array.isArray(characters) || characters.length === 0) {
-      throw new Error("キャラクターデータが取得できませんでした。");
+    // プールキャラが1体も見つからない場合はエラー
+    if (poolChars.length === 0) {
+      throw new Error("対象キャラクターが見つかりませんでした。");
     }
 
     // --- Step 3: 五行に合ったキャラクターをフィルタリング ---
-    let filtered = characters.filter((c) =>
+    let filtered = poolChars.filter((c) =>
       hasKeyword(c.natureType, gogyou.keywords)
     );
 
-    // フィルタ結果が空の場合は全キャラからランダム選択（フォールバック）
+    // 五行フィルタ結果が空の場合はプール全体からランダム選択（フォールバック）
     if (filtered.length === 0) {
-      filtered = characters;
+      filtered = poolChars;
     }
 
     // --- Step 4: 画像が有効なキャラクターを選ぶ ---
-    // 候補をシャッフルして順番に画像を検証し、最初に有効だったキャラを使用する
+    // 候補をシャッフルして順番に画像を検証し、最初に有効だったキャラを採用する
     const shuffled = [...filtered].sort(() => Math.random() - 0.5);
 
     let chosen = null;
@@ -497,14 +498,7 @@ async function runDivination() {
 
   } catch (error) {
     hideLoading();
-
-    // [v1.2] エラーメッセージを仕様通りに統一
-    if (error instanceof TypeError && error.message.includes("fetch")) {
-      showError("キャラクター情報の取得に失敗しました。\nインターネット接続を確認してください。");
-    } else {
-      showError("キャラクター情報の取得に失敗しました。\nしばらく待ってから再度お試しください。");
-    }
-
+    showError("キャラクター情報の取得に失敗しました。\nしばらく待ってから再度お試しください。");
     console.error("[守護忍診断] エラー:", error);
   }
 }
