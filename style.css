@@ -234,6 +234,20 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ---------- [v1.2] キャラクタープロフィール ---------- */
+.char-profile {
+  font-size: 0.8rem;
+  color: #a09888;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  margin-bottom: 1.2rem;
+  padding: 0.5rem 0.8rem;
+  /* 細い枠でプロフィールエリアを区切る */
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.15);
+}
+
 /* ---------- 情報行（ラッキーカラー・開運アクション） ---------- */
 .info-row {
   display: flex;
