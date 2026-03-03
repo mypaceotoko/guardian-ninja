@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <!-- スマホ最適化のためのビューポート設定 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>今日の守護忍 ─ 五行 × Naruto 診断</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ページ全体のラッパー -->
+  <div class="page-wrapper">
+
+    <!-- ヘッダー -->
+    <header class="site-header">
+      <p class="site-subtitle">五行 × Naruto</p>
+      <h1 class="site-title">今日の守護忍</h1>
+    </header>
+
+    <!-- メインカード -->
+    <main class="card">
+
+      <!-- 占う前の説明文 -->
+      <p class="intro-text">
+        今日の五行があなたを守護する忍を導きます。<br>
+        ボタンを押して今日の守護忍を確かめましょう。
+      </p>
+
+      <!-- 占うボタン -->
+      <button class="btn-divine" id="btnDivine">
+        今日の守護忍を占う
+      </button>
+
+      <!-- 読み込み中インジケーター（初期は非表示） -->
+      <div class="loading" id="loading" hidden>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+
+      <!-- エラーメッセージ（初期は非表示） -->
+      <p class="error-msg" id="errorMsg" hidden></p>
+
+      <!-- 結果エリア（初期は非表示・フェードインで表示） -->
+      <section class="result" id="result" hidden>
+
+        <!-- 五行バッジ -->
+        <div class="gogyou-badge" id="gogyouBadge">
+          <span class="gogyou-label">今日の五行</span>
+          <span class="gogyou-name" id="gogyouName"></span>
+        </div>
+
+        <!-- キャラクター画像 -->
+        <div class="char-image-wrap">
+          <img
+            class="char-image"
+            id="charImage"
+            src=""
+            alt="守護忍の画像"
+          />
+        </div>
+
+        <!-- キャラクター名 -->
+        <h2 class="char-name" id="charName"></h2>
+
+        <!-- ラッキーカラー -->
+        <div class="info-row">
+          <span class="info-label">ラッキーカラー</span>
+          <span class="info-value" id="luckyColor"></span>
+          <!-- カラーサンプル丸 -->
+          <span class="color-dot" id="colorDot"></span>
+        </div>
+
+        <!-- 開運アクション -->
+        <div class="info-row action-row">
+          <span class="info-label">開運アクション</span>
+          <span class="info-value" id="luckyAction"></span>
+        </div>
+
+      </section><!-- /.result -->
+
+    </main><!-- /.card -->
+
+    <!-- フッター -->
+    <footer class="site-footer">
+      <p>キャラクターデータ: <a href="https://dattebayo-api.onrender.com" target="_blank" rel="noopener">Dattebayo API</a></p>
+    </footer>
+
+  </div><!-- /.page-wrapper -->
+
+  <!-- JavaScriptファイルの読み込み（bodyの末尾に置くことでDOMが確実に存在する） -->
+  <script src="script.js"></script>
+</body>
+</html>
