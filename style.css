@@ -221,6 +221,19 @@ body {
   color: #f0ebe3;
 }
 
+/* ---------- [追加 v1.1] 世界観テキスト ---------- */
+.world-text {
+  font-size: 0.9rem;
+  color: #c8c0b0;
+  font-style: italic;
+  letter-spacing: 0.05em;
+  line-height: 1.7;
+  margin-bottom: 1.2rem;
+  /* 小さい上線でキャラ名と分離 */
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 /* ---------- 情報行（ラッキーカラー・開運アクション） ---------- */
 .info-row {
   display: flex;
